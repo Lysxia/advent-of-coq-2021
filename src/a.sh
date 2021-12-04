@@ -6,7 +6,7 @@ if [ "$#" -ne 3 ]; then
   echo -e "Usage: $0 aocXX.v solve aocXX_input.txt"
   echo -e "where"
   echo -e "\taocXX.v\t\tSolution module"
-  echo -e "\tsolve\t\tSolution function name (usually solve or solve2)"
+  echo -e "\tsolve\t\tSolution function name (usually solve or solve2 or solve12)"
   echo -e "\taocXX_input.txt\tInput file"
   exit 1
 fi

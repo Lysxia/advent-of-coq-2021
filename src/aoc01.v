@@ -54,6 +54,8 @@ Definition solve2 : list N -> N := count_increases2.
 
 (* Compute solve2 example. (* 5 *) *)
 
+Definition solve12 (i : list N) : N * N := (solve i, solve2 i).
+
 (* This solution avoids computing the sums. We can prove that it's equivalent to a more literal
    solution that does the sums. *)
 

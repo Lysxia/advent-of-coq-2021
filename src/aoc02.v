@@ -67,6 +67,8 @@ Definition solve2 (xs : list (cmd * Z)) : Z :=
   let '(hpos, zpos, _aim) := eval_2 xs (0, 0, 0) in
   hpos * zpos.
 
+Definition solve12 (i : list (cmd * Z)) : Z * Z := (solve i, solve2 i).
+
 (* Compute solve2 example. *)
 
 (* The second part generalizes the first: the [aim] in Part Two plays the role of

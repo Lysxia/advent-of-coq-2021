@@ -12,9 +12,13 @@ Fixpoint bindec_to_bits_ (d : Decimal.uint) : list bool :=
   | Nil | _ => []
   end.
 
-Definition bindec_to_bits (d : Decimal.uint) : bits := Mk_bits (bindec_to_bits_ d).
+Definition bindec_to_bits (d : Number.uint) : option bits :=
+  match d with
+  | UIntDecimal d => Some (Mk_bits (bindec_to_bits_ d))
+  | _ => None
+  end.
 
-Definition dummy_bits_to (b : bits) : option Decimal.uint := None.
+Definition dummy_bits_to (b : bits) : option Number.uint := None.
 
 Declare Scope bits_scope.
 Number Notation bits bindec_to_bits dummy_bits_to : bits_scope.
@@ -114,3 +118,6 @@ Definition solve2 (xs : list (list bool)) : N :=
   bits_to_N ogr * bits_to_N csr.
 
 (* Compute solve2 example. *)
+
+Definition solve12 (i : list (list bool)) : N * N :=
+  (solve i, solve2 i).
