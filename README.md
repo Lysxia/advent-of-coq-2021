@@ -5,13 +5,18 @@ https://adventofcode.com/2021
 
 ## Run code
 
-Dependencies: Coq.
+Dependencies:
+- Coq
+- coq-stdpp
 
 ```shell
+# Install dependencies
+opam install coq-stdpp
+
+# Run
 cd src/
 
-./a.sh aoc01.v solve  aoc01_input.txt
-./a.sh aoc01.v solve2 aoc01_input.txt
+./a.sh aoc01.v solve12 aoc01_input.txt  # Pair of answers for Day 1: Part One and Part Two
 ```
 
 
