@@ -4,3 +4,4 @@
 ./a.sh aoc04.v solve12 aoc04_input.txt
 ./a.sh aoc05.v solve12 aoc05_input.txt
 ./a.sh aoc06.v solve12 aoc06_input.txt
+./a.sh aoc07.v solve12 aoc07_input.txt
