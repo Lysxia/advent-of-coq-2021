@@ -66,10 +66,8 @@ Fixpoint maximum (xs : list N) : N :=
 
 Definition solve2 (xs : list N) : N :=
   let f n := fuel2 xs n in
-  let f0 := f 0 in
-  let n := maximum xs in
-  let fn := f n in
-  snd (searchMin (S (N.to_nat n)) f 0 n).
+  let m := maximum xs in
+  snd (searchMin (S (N.to_nat m)) f 0 m).
 
 (* Compute solve2 example. *)
 
@@ -227,10 +225,14 @@ Proof.
 Qed.
 
 Instance Proper_mul_le : Proper (N.le ==> N.le ==> N.le) N.mul.
-Admitted.
+Proof.
+  unfold Proper, respectful. auto using N.mul_le_mono.
+Qed.
 
 Instance Proper_add_le : Proper (N.le ==> N.le ==> N.le) N.add.
-Admitted.
+Proof.
+  unfold Proper, respectful. auto using N.add_le_mono.
+Qed.
 
 Lemma add_twice n : n + n = 2 * n.
 Proof.
