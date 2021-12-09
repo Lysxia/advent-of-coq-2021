@@ -1,4 +1,7 @@
 From Coq Require Export String Ascii List NArith Arith.
+From Coq Require Import Permutation.
+
+Set Implicit Arguments.
 
 Import ListNotations.
 
@@ -192,3 +195,72 @@ Definition solve2 : list Line -> N :=
 
 Definition solve12 (xs : list Line) : N * N :=
   (solve xs, solve2 xs).
+
+(* Spec, no proofs *)
+
+Definition digits : list raw_signal :=
+  ["cf"; "acdeg"; "acdfg"; "bcdf"; "abdfg"; "abdefg"; "acf"; "abcdefg"; "abcdfg"]%string.
+
+(* The seven segments *)
+Definition segs : list ascii := ["a"; "b"; "c"; "d"; "e"; "f"; "g"]%char.
+
+Definition mapping {A B} (xs : list A) (ys : list B) (x : A) (y : B) :=
+  List.In (x, y) (List.combine xs ys).
+
+Fixpoint Forall2_string (F : ascii -> ascii -> Prop) (s1 s2 : string) : Prop :=
+  match s1, s2 with
+  | "", "" => True
+  | c1 :: s1, c2 :: s2 => F c1 c2 /\ Forall2_string F s1 s2
+  | _, _ => False
+  end.
+
+Definition Permutation_string (s1 s2 : string) : Prop :=
+  Permutation (list_ascii_of_string s1) (list_ascii_of_string s2).
+
+Definition index {A} (xs : list A) (n : nat) (x : A) : Prop :=
+  (n < length xs)%nat /\ nth n xs x = x.
+
+(* A well-formed input line [l] is related to the "canonical" representation of segments
+   [segs] and [digits] as follows. *)
+Record LineSpec (l : Line) : Type :=
+  { (* (1) The display segments are scrambled *)
+    ssegs : list ascii  (* scrambled display lines *)
+  ; ssegs_P : Permutation segs ssegs
+
+    (* (2) We apply the segment scrambling to the digits *)
+  ; sdigits : list raw_signal
+  ; sdigits_P : Forall2 (Forall2_string (mapping segs ssegs)) digits sdigits
+
+    (* (3) The digits are shuffled *)
+  ; ssdigits : list raw_signal
+  ; ssdigits_P : Permutation sdigits ssdigits
+
+    (* (4) The order of segments in each digit is shuffled,
+       this yields the first half of our input. *)
+  ; sssdigits : list raw_signal := fst l
+  ; sssdigits_P : Forall2 Permutation_string ssdigits sssdigits
+
+    (* (5) The second half of the input is 4 digits *)
+  ; outs : list nat
+  ; outs_length : length outs = 4%nat
+
+    (* (6) The digits are mapped to their 7-segment display
+       (this implies the elements of [outs] are actually digits) *)
+  ; douts : list raw_signal
+  ; douts_X : Forall2 (index digits) outs douts
+
+    (* (7) Apply the segment scrambling (like (2)) *)
+  ; sdouts : list raw_signal
+  ; sdouts_P : Forall2 (Forall2_string (mapping segs ssegs)) douts sdouts
+
+    (* (8) The segments are shuffled, that's the second half of the input. *)
+  ; ssdouts : list raw_signal := snd l
+  ; ssdouts_P : Forall2 Permutation_string sdouts ssdouts
+  }.
+
+(* [decipher_line] reconstructs the 4 digits in [outs]. *)
+Theorem decipher_correct (l : Line) (ls : LineSpec l)
+  : decipher_line l = from_decimal (map N.of_nat (outs ls)).
+Proof.
+  (* Good luck *)
+Abort.
