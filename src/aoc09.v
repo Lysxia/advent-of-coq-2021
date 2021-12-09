@@ -1,9 +1,9 @@
-Set Implicit Arguments.
-Set Contextual Implicit.
-
 From Coq Require Export NArith List Number Decimal.
 
 From stdpp Require Import gmap sorting.
+
+Set Implicit Arguments.
+Set Contextual Implicit.
 
 Import ListNotations.
 
@@ -122,7 +122,19 @@ Fixpoint for_ {A} (xs : list A) (f : A -> m unit) : m unit :=
 End St.
 End St.
 
-Notation "'let!' a ':=' u 'in' v" := (St.bind u (fun a => v)) (at level 200, a binder).
+Notation "'let*' a ':=' u 'in' v" := (St.bind u (fun a => v)) (at level 200, a binder).
+
+Definition isSome {A} (x : option A) :=
+  match x with
+  | Some _ => true
+  | None => false
+  end.
+
+(* [gset] insertion (as [fun x s => union (singleton x) s]) is slow,
+   so we redefine our own sets from maps which have fast [insert]. *)
+Notation set X := (gmap X unit).
+Notation insert_set x s := (insert x tt s).
+Notation elem_set x s := (isSome (lookup x s)).
 
 Section CC.
 
@@ -134,19 +146,16 @@ Record graph : Type :=
   }.
 
 Record CC_state : Type :=
-  { visited : gset V
+  { visited : set V
   ; cur_component : list V
   }.
 
-Definition set_visited (f : gset V -> gset V) (s : CC_state) : CC_state :=
-  {| visited := f (visited s) ; cur_component := cur_component s |}.
-
 Definition check_visited (v : V) : St.m CC_state bool :=
-  St.Mk (fun s => (s, bool_decide (elem_of v (visited s)))).
+  St.Mk (fun s => (s, elem_set v (visited s))).
 
 Definition visit (v : V) : St.m CC_state unit :=
   St.Mk (fun s =>
-    ( {| visited := union (singleton v) (visited s)
+    ( {| visited := insert_set v (visited s)
       ;  cur_component := v :: cur_component s |}
     , tt)).
 
@@ -159,11 +168,11 @@ Definition get_cur_component : St.m CC_state (list V) :=
   St.Mk (fun s => (s, cur_component s)).
 
 Fixpoint create_component (g : graph) (fuel : nat) (v : V) : St.m CC_state unit :=
-  let! bvisited := check_visited v in
+  let* bvisited := check_visited v in
   if bvisited then
     St.pure tt
   else match fuel with | O => St.pure tt | S fuel =>
-    let! _ := visit v in
+    let* _ := visit v in
     St.for_ (neighbors g v) (create_component g fuel)
   end.
 
@@ -172,9 +181,9 @@ Fixpoint _connected_components (g : graph) (fuel : nat) (vs : list V) (cc : list
   match vs with
   | nil => St.pure cc
   | v :: vs =>
-    let! _ := reset_cur_component in
-    let! _ := create_component g fuel v in
-    let! c := get_cur_component in
+    let* _ := reset_cur_component in
+    let* _ := create_component g fuel v in
+    let* c := get_cur_component in
     let cc :=
       match c with
       | nil => (* Already visited *) cc
@@ -197,9 +206,9 @@ Definition foldi {A B} (f : N -> A -> B -> B) (xs : list A) (b0 : B) : B :=
     | nil => b0
     end in _foldi 0 xs.
 
-Definition map_of_grid (xs : list (list N)) : gmap (N * N) N :=
+Definition map_of_grid (xs : list (list N)) : set (N * N) :=
   foldi (fun i =>
-    foldi (fun j h => insert (i, j) h))
+    foldi (fun j h m => if h <? 9 then insert_set (i, j) m else m))
     xs empty.
 
 Fixpoint map_filter {A B} (f : A -> option B) (xs : list A) : list B :=
@@ -212,18 +221,12 @@ Fixpoint map_filter {A B} (f : A -> option B) (xs : list A) : list B :=
     end
   end.
 
-Definition not_mountain (m : gmap (N * N) N) (ij : N * N) : bool :=
-  match lookup ij m with
-  | None => false
-  | Some h => h <? 9
-  end.
-
-Definition fourneighbors (m : gmap (N * N) N) '((i,j) : N * N) : list (N * N) :=
-  filter (not_mountain m) [(i+1,j);(i-1,j);(i,j+1);(i,j-1)].
+Definition fourneighbors (m : set (N * N)) '((i,j) : N * N) : list (N * N) :=
+  filter (fun x => elem_set x m) [(i+1,j);(i-1,j);(i,j+1);(i,j-1)].
 
 (* Assumes padding on the sides *)
-Definition graph_of_map (m : gmap (N * N) N) : graph (N * N) :=
-  {| nodes := filter (not_mountain m) (elements (dom (gset (N * N)) m))
+Definition graph_of_map (m : set (N * N)) : graph (N * N) :=
+  {| nodes := elements (dom (gset _) m)
   ;  neighbors := fourneighbors m
   |}.
 
