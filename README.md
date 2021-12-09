@@ -6,7 +6,7 @@ https://adventofcode.com/2021
 ## Run code
 
 Dependencies:
-- Coq
+- Coq (tested with Coq 8.13)
 - coq-stdpp
 
 ```shell
