@@ -58,22 +58,31 @@ Inductive Result : Type :=
 | Valid (z : list ascii)
 .
 
+Definition bra_cket (bra : ascii) : ascii :=
+  (if bra =? "(" then ")"
+   else if bra =? "[" then "]"
+   else if bra =? "{" then "}"
+   else if bra =? "<" then ">"
+   else "?")%char.
+
+Definition cket_bra (cket : ascii) : ascii :=
+  (if cket =? ")" then "("
+   else if cket =? "]" then "["
+   else if cket =? "}" then "{"
+   else if cket =? ">" then "<"
+  else "?")%char.
+
 Fixpoint _check (z : list ascii) (s : string) : Result :=
   match s with
   | "" => Valid z
   | c :: s =>
-    let pop (c' : ascii) :=
-      match z with
-      | (cz :: z)%list => if (c' =? cz)%char then _check z s else Illegal c
-      | _ => Illegal c
-      end in
     if ((c =? "(") || (c =? "[") || (c =? "{") || (c =? "<"))%char%bool then
       _check (c :: z) s
-    else if (c =? ")")%char then pop "("%char
-    else if (c =? "]")%char then pop "["%char
-    else if (c =? "}")%char then pop "{"%char
-    else if (c =? ">")%char then pop "<"%char
-    else Illegal  c
+    else
+      match z with
+      | (cz :: z)%list => if (cket_bra c =? cz)%char then _check z s else Illegal c
+      | _ => Illegal c
+      end
   end.
 
 Definition check := _check [].
@@ -197,4 +206,208 @@ Qed.
 Lemma solve12Correct xs : solve12 xs = (solve xs, solve2 xs).
 Proof.
   unfold solve12; cbn. rewrite sum_with_map, map_filter_map. reflexivity.
+Qed.
+
+(**)
+
+(* Correctness of [check] *)
+
+(*
+Soundness and completeness.
+
+Soundness: If [check s] returns [Valid z], then the input [s] can be completed
+into a well-bracketed string, using the stack [z], [s ++ destack z].
+
+Theorem check_sound s z : check s = Valid z -> wellbracketed (s ++ destack z).
+
+Completeness: If [check s] returns [Illegal c], then [c] is the earliest character of [s]
+such that the prefix before [c] is still completeable to a well-bracketed string, but not any
+completion after [c] (including [s] itself).
+
+Theorem check_complete s c
+  : check s = Illegal c ->
+    exists t u, s = t ++ c :: u
+      /\ (exists v, wellbracketed (t ++ v))
+      /\ forall u', ~wellbracketed (t ++ c :: u').
+*)
+
+Lemma append_assoc (s t u : string) : (s ++ t) ++ u = s ++ (t ++ u).
+Proof.
+  induction s; cbn; congruence.
+Qed.
+
+Lemma append_empty_r (s : string) : (s ++ "") = s.
+Proof.
+  induction s; cbn; congruence.
+Qed.
+
+Lemma append_cons_r (s : string) (c : ascii) (t : string) : (s ++ c :: "") ++ t = (s ++ c :: t).
+Proof.
+  induction s; cbn; congruence.
+Qed.
+
+Create HintDb wb.
+
+Inductive brackets : ascii -> ascii -> Prop :=
+| brackets_Par : brackets "(" ")"
+| brackets_Squ : brackets "[" "]"
+| brackets_Bra : brackets "{" "}"
+| brackets_Ang : brackets "<" ">"
+.
+#[global] Hint Constructors brackets : wb.
+
+Inductive wellbracketed : string -> Prop :=
+| wellbracketed_empty : wellbracketed ""
+| wellbracketed_step bra cket s t
+  : brackets bra cket -> wellbracketed s -> wellbracketed t -> wellbracketed (bra :: s ++ cket :: t)
+.
+#[global] Hint Constructors wellbracketed : wb.
+
+Lemma wellbracketed_app s t : wellbracketed s -> wellbracketed t -> wellbracketed (s ++ t).
+Proof.
+  revert t; induction 1; intros; cbn; auto.
+  rewrite append_assoc; constructor; auto.
+Qed.
+#[export] Hint Resolve wellbracketed_app : wb.
+
+Ltac spliteq :=
+  lazymatch goal with
+  | [ |- context [ (?lhs =? ?rhs)%char ] ] => destruct (Ascii.eqb_spec lhs rhs)
+  end.
+
+Lemma _check_adequate s : wellbracketed s -> forall t z, _check z (s ++ t) = _check z t.
+Proof.
+  induction 1.
+  - reflexivity.
+  - cbn [_check]; intros; cbn; destruct H; cbn.
+    all: rewrite append_assoc; cbn.
+    all: rewrite IHwellbracketed1; cbn.
+    all: apply IHwellbracketed2.
+Qed.
+
+Theorem check_adequate s : wellbracketed s -> check s = Valid [].
+Proof.
+  rewrite <- (append_empty_r s) at 2.
+  exact (fun H => _check_adequate H _ _).
+Qed.
+
+Inductive unstack : list ascii -> string -> Prop :=
+| unstack_nil s : wellbracketed s -> unstack [] s
+| unstack_cons bra cket z t s
+  : brackets bra cket -> unstack z t -> wellbracketed s -> unstack (bra :: z) (t ++ bra :: s)
+.
+#[export] Hint Constructors unstack : wb.
+
+Lemma extend_unstack z t s : unstack z t -> wellbracketed s -> unstack z (t ++ s).
+Proof.
+  intros [].
+  - constructor. apply wellbracketed_app; auto.
+  - rewrite append_assoc. cbn; econstructor; eauto. apply wellbracketed_app; auto.
+Qed.
+
+Lemma cket_bra_cket bra cket
+  : cket_bra cket = bra -> bra <> "?"%char -> bra_cket bra = cket.
+Proof.
+  unfold cket_bra; repeat (spliteq; cbn); intros; subst; reflexivity + contradiction.
+Qed.
+
+Lemma _check_sound z z' t s : unstack z t -> _check z s = Valid z' -> unstack z' (t ++ s).
+Proof.
+  revert z t.
+  induction s; intros z t Hz.
+  - rewrite append_empty_r; cbn; congruence.
+  - cbn [_check]; repeat (spliteq; cbn [orb]); subst.
+    1,2,3,4: rewrite <- append_cons_r; apply IHs.
+    1,2,3,4: econstructor; eauto with wb.
+    all: destruct Hz; try discriminate.
+    all: destruct H; cbn; spliteq; cbn; try discriminate.
+    all: apply cket_bra_cket in e; [ subst | discriminate ].
+    all: rewrite <- append_cons_r; apply IHs.
+    all: rewrite append_assoc; cbn.
+    all: apply extend_unstack; eauto with wb.
+Qed.
+
+Fixpoint destack (z : list ascii) : string :=
+  match z with
+  | nil => ""
+  | (c :: z)%list => bra_cket c :: destack z
+  end.
+
+Definition destack_unstack z t : unstack z t -> forall s, wellbracketed s -> wellbracketed (t ++ s ++ destack z).
+Proof.
+  induction 1; cbn; intros.
+  - rewrite append_empty_r; apply wellbracketed_app; auto.
+  - rewrite append_assoc; destruct H; cbn.
+    all: rewrite <- (append_assoc s), <- (append_cons_r (s ++ _)); change (?c :: ?s ++ ?t) with ((c :: s) ++ t).
+    all: apply IHunstack.
+    all: eauto with wb.
+Qed.
+
+Theorem check_sound s z : check s = Valid z -> wellbracketed (s ++ destack z).
+Proof.
+  intros H; eapply destack_unstack with (s := "").
+  - eapply _check_sound with (t := ""); eauto with wb.
+  - eauto with wb.
+Qed.
+
+Lemma check_prefix s t z : check (s ++ t) = Valid z -> exists z', check s = Valid z'.
+Proof.
+  unfold check; generalize (@nil ascii).
+  induction s; cbn [check _check String.append]; [ eauto | ].
+  repeat (spliteq; cbn [orb]); subst; try auto.
+  intros []; [ discriminate | ].
+  spliteq; [ | discriminate].
+  apply IHs.
+Qed.
+
+Lemma ex_f {A B} (f : A -> B) (P : B -> Prop) : ex (fun x => P (f x)) -> ex P.
+Proof.
+  intros [x H]; exists (f x); exact H.
+Qed.
+
+Lemma _check_legit z s c
+  : _check z s = Illegal c ->
+    exists t u, s = t ++ c :: u /\ _check z (t ++ c :: "") = Illegal c /\ exists z', _check z t = Valid z'.
+Proof.
+  revert z; induction s as [ | cs s IH ]; cbn; [ discriminate | ].
+  intros z Hz.
+  lazymatch goal with
+  | [ |- ex ?P ] =>
+    let P' := match eval pattern c in P with
+      | (?P' _) => P'
+      end in
+    enough (HH : (exists t, P (cs :: t)) \/ (c = cs /\ P' cs ""))
+      by (destruct HH as [[t HH] | [-> HH]]; [exists (cs :: t) | exists ""]; exact HH)
+  end.
+  cbn. revert Hz.
+  repeat (spliteq; cbn [orb]).
+  1,2,3,4: left; specialize (IH _ Hz); destruct IH as (t & u & ? & ?); exists t, u; split; congruence.
+  destruct z.
+  - injection 1; intros <-; right; eauto 6.
+  - spliteq; [ | injection 1; intros <-; right; eauto 6 ].
+    left; specialize (IH _ Hz).
+    destruct IH as (t & u & ? & ?). exists t, u; split; congruence.
+Qed.
+
+Lemma check_legit s c
+  : check s = Illegal c ->
+    exists t u, s = t ++ c :: u /\ check (t ++ c :: "") = Illegal c /\ exists z', check t = Valid z'.
+Proof.
+  apply _check_legit.
+Qed.
+
+Theorem check_complete s c
+  : check s = Illegal c ->
+    exists t u, s = t ++ c :: u
+      /\ (exists v, wellbracketed (t ++ v))
+      /\ forall u', ~wellbracketed (t ++ c :: u').
+Proof.
+  intros H; destruct (check_legit _ H) as (t & u & Hs & Ht & z' & Hz').
+  exists t, u; split; [exact Hs | split ].
+  - eexists; revert Hz'; apply check_sound.
+  - intros u' H'.
+    apply check_adequate in H'.
+    rewrite <- append_cons_r in H'.
+    apply check_prefix in H'.
+    destruct H' as [? H']; congruence.
 Qed.
