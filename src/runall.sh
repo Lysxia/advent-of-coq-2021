@@ -6,3 +6,5 @@
 ./a.sh aoc06.v solve12 aoc06_input.txt
 ./a.sh aoc07.v solve12 aoc07_input.txt
 ./a.sh -quote aoc08.v solve12 aoc08_input.txt
+./a.sh aoc09.v solve12 aoc09_input.txt
+./a.sh -quote aoc10.v solve12 aoc10_input.txt
