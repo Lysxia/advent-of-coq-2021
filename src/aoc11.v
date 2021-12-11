@@ -96,7 +96,7 @@ Definition first_flash (g : gmap point N) : list point :=
 (* Phase 2.b: Propagage the energy *)
 
 (* We only process each flashing point once, when it increases from 9 to 10. *)
-Definition _radiate '(ij : point) (g : gmap point N) (todo : list point)
+Definition radiate '(ij : point) (g : gmap point N) (todo : list point)
   : gmap point N * list point :=
   match lookup ij g with
   | None => (g, todo)
@@ -104,14 +104,20 @@ Definition _radiate '(ij : point) (g : gmap point N) (todo : list point)
       (insert ij (N.succ energy) g, if energy =? 9 then ij :: todo else todo)
   end.
 
+Definition neighbors '((i,j) : point) : list point :=
+  [(i+1,j+1); (i+1,j); (i+1,j-1); (i,j+1); (i,j-1); (i-1,j+1); (i-1,j); (i-1,j-1)]%Z.
+
+Definition flash (ij : point) (g : gmap point N) (todo : list point)
+  : gmap point N * list point :=
+  fold_left (fun '(g, todo) ij => radiate ij g todo) (neighbors ij) (g, todo).
+
 Fixpoint _propagate (fuel : nat) (g : gmap point N) (ndone : N) (todo : list point)
   : gmap point N * N :=
   match todo, fuel with
   | [], _ => (g, ndone)
-  | _, O => (empty, 0)  (* Should not happend *)
-  | (i, j) :: todo, S fuel =>
-      let neighbors := [(i+1,j+1); (i+1,j); (i+1,j-1); (i,j+1); (i,j-1); (i-1,j+1); (i-1,j); (i-1,j-1)]%Z in
-      let '(g, todo) := fold_left (fun '(g, todo) ij => _radiate ij g todo) neighbors (g, todo) in
+  | _, O => (empty, 0)  (* Should not happen *)
+  | ij :: todo, S fuel =>
+      let '(g, todo) := flash ij g todo in
       _propagate fuel g (N.succ ndone) todo
   end.
 
@@ -158,3 +164,61 @@ Definition solve2 := steps2 1000.
 (* Compute solve2 example. *)
 
 Definition solve12 g := (solve g, solve2 g).
+
+(* Spec (no proofs) *)
+
+Definition isSome {A} (x : option A) :=
+  match x with
+  | Some _ => true
+  | None => false
+  end.
+
+(* [gset] insertion (as [fun x s => union (singleton x) s]) is slow,
+   so we redefine our own sets from maps which have fast [insert]. *)
+Notation set X := (gmap X unit).
+Notation insert_set x s := (insert x tt s).
+Notation elem_set x s := (isSome (lookup x s)).
+
+Definition radiate' '(ij : point) (g : gmap point N) : gmap point N :=
+  match lookup ij g with
+  | None => g
+  | Some energy => insert ij (N.succ energy) g
+  end.
+
+Definition flash' (ij : point) (g : gmap point N) : gmap point N :=
+  fold_left (fun g ij => radiate' ij g) (neighbors ij) g.
+
+Record state : Type := MkState
+  { energies : gmap point N  (* current levels *)
+  ; flashed : set point      (* points that already flashed *)
+  }.
+
+Definition lookup0 (ij : point) (m : gmap point N) : N :=
+  match lookup ij m with
+  | Some n => n
+  | None => 0
+  end.
+
+Definition one_flash : state -> state -> Prop := fun s s' =>
+  exists ij, 9 <? lookup0 ij (energies s) /\ ~ elem_of ij (dom (gset _) (flashed s)) /\
+    s' = {| energies := flash' ij (energies s) ; flashed := insert_set ij (flashed s) |}.
+
+Lemma strongly_confluent_one_flash_prop (s s1 s2 : state)
+  : one_flash s s1 -> one_flash s s2 ->
+    s1 = s2 \/ exists s3, one_flash s1 s3 /\ one_flash s2 s3.
+Proof.
+Abort.
+
+Inductive star {A} (r : A -> A -> Prop) : A -> A -> Prop :=
+| star_zero x : star r x x
+| star_succ x y z : r x y -> star r y z -> star r x z
+.
+
+Definition all_flash : state -> state -> Prop := fun s s' =>
+  star one_flash s s' /\ forall s'', ~ one_flash s' s''.
+
+Theorem step_correct g
+  : exists s', all_flash (MkState g empty) s'
+      /\ step g = (energies s', N.of_nat (size (flashed s'))).
+Proof.
+Abort.
