@@ -8,3 +8,4 @@
 ./a.sh -quote aoc08.v solve12 aoc08_input.txt
 ./a.sh aoc09.v solve12 aoc09_input.txt
 ./a.sh -quote aoc10.v solve12 aoc10_input.txt
+./a.sh aoc11.v solve12 aoc11_input.txt
