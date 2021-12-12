@@ -143,24 +143,27 @@ Definition visit (x : v) (visited : set v) : option (set v) :=
   else if elem_set x visited then None
   else Some (insert_set x visited).
 
+Definition start_from (x : v) : set v * v :=
+  (insert_set x empty, x).
+
 Definition sum_N (xs : list N) : N :=
   fold_left N.add xs 0.
 
 Definition _count_paths {M} `{Monad M} {VISITED} (_visit : v -> VISITED -> option VISITED)
   (g : graph v) : endo (VISITED * v -> M N) := fun __count_paths '(visited, x) =>
   if String.eqb x "end" then ret 1 else
-  match _visit x visited with
-  | None => ret 0
-  | Some visited =>
-    let* ns := traverse (fun x => __count_paths (visited, x)) (get_edges x g) in
-    ret (sum_N ns)
-  end.
+  let search x := match _visit x visited with
+    | None => ret 0
+    | Some visited => __count_paths (visited, x)
+    end in
+  let* ns := traverse search (get_edges x g) in
+  ret (sum_N ns).
 
 (* The maximum length can be up to twice the number of nodes, because we can revisit big nodes.
    An implicit assumption is that there are no adjacent big nodes, so a long path must consist
    of an alternation of big and small nodes, and each small node is visited once, hence the bound. *)
 Definition count_paths (g : graph v) : N :=
-  memo_fix (2 * size g) 0 (_count_paths visit g) (empty, "start"%string).
+  memo_fix (2 * size g) 0 (_count_paths visit g) (start_from "start").
 
 Definition solve (xs : Input) : N :=
   count_paths (adj_list xs).
@@ -173,10 +176,11 @@ Definition visit2 (x : v) '((may_revisit, visited) : bool * set v) : option (boo
     if negb (String.eqb x "start") && may_revisit then Some (false, visited) else None
   else Some (may_revisit, insert_set x visited).
 
-Definition empty2 : bool * set v := (true, empty).
+Definition start_from2 (x : v) : ((bool * set v) * v) :=
+  ((true, insert_set x empty), x).
 
 Definition count_paths2 (g : graph v) : N :=
-  memo_fix (2 * S (size g)) 0 (_count_paths visit2 g) (empty2, "start"%string).
+  memo_fix (2 * S (size g)) 0 (_count_paths visit2 g) (start_from2 "start").
 
 Definition solve2 (xs : Input) : N :=
   count_paths2 (adj_list xs).
