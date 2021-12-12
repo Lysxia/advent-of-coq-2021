@@ -9,3 +9,4 @@
 ./a.sh aoc09.v solve12 aoc09_input.txt
 ./a.sh aoc10.v solve12 aoc10_input.txt
 ./a.sh aoc11.v solve12 aoc11_input.txt
+./a.sh aoc12.v solve12 aoc12_input.txt
