@@ -107,3 +107,5 @@ Definition solve2 (xs : Input) : string :=
   display (fold_all xs).
 
 (* Compute solve2 example. *)
+
+Definition solve12 (xs : Input) := (solve xs, solve2 xs).
