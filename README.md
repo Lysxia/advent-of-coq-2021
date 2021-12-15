@@ -16,7 +16,7 @@ opam install coq-stdpp
 # Run
 cd src/
 
-./a.sh aoc01.v solve12 aoc01_input.txt  # Pair of answers for Day 1: Part One and Part Two
+./a.sh aoc01.v aoc01_input.txt solve12  # Pair of answers for Day 1: Part One and Part Two
 ```
 
 
