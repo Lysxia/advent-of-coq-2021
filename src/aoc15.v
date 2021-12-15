@@ -179,30 +179,33 @@ Notation set X := (gmap X unit).
 Notation insert_set x s := (insert x tt s).
 Notation elem_set x s := (isSome (lookup x s)).
 
-Section Dijkstra.
+Section Dijkstra. (* This is really A* now *)
 
 Context (V : Type) `{EqDecision V, Countable V}.
 
 Record graph : Type :=
-  { max_edges : nat  (* upper bound on the number of edges, as fuel *)
+  { max_edges : N  (* upper bound on the number of edges, as fuel *)
   ; neighbors : V -> list (N * V)
+  ; heuristic : V -> N  (* Upper bound on the remaining distance *)
   }.
 
 Definition no_fuel : N. Proof. exact 0. Qed.
 
-Fixpoint _dijkstra (g : graph) (goal : V) (q : Q.t N.le V) (visited : set V) (fuel : nat) : N :=
-  match fuel with O => no_fuel | S fuel =>
-  match Q.pop q with None => 0 | Some (d, v, q) =>
+Definition _dijkstra (g : graph) (goal : V) (__dijkstra : _)
+    (q : Q.t N.le (N * V)) (visited : set V) : N :=
+  match Q.pop q with None => 0 | Some (_, (d, v), q) =>
   if decide (v = goal) then d (* REACHED GOAL *) else
-  if elem_set v visited then _dijkstra g goal q visited fuel (* SKIP *) else
+  if elem_set v visited then __dijkstra q visited (* SKIP *) else
   let visited := insert_set v visited in
-  let q := fold_left (fun q '(dd, v) => Q.push (d + dd) v q) (neighbors g v) q in
-  _dijkstra g goal q visited fuel
-  end
+  let push q '(dd, v) := Q.push (d + dd + heuristic g v) (d + dd, v) q in
+  let q := fold_left push (neighbors g v) q in
+  __dijkstra q visited
   end.
 
 Definition dijkstra (g : graph) (goal start : V) : N :=
-  _dijkstra g goal (Q.push 0 start Q.empty) empty (S (max_edges g)).
+  N.iter (N.succ (max_edges g)) (_dijkstra g goal) (fun _ _ => 0)
+    (Q.push 0 (* don't need the heuristic for the first point *) (0, start) Q.empty)
+    empty.
 
 End Dijkstra.
 
@@ -226,16 +229,21 @@ Definition neigh (m : gmap point N) (ij : point) : list (N * point) :=
     | Some d => Some (d, ij)
     end) (grid_neighbors ij).
 
-Definition graph_of_input (i : Input) : graph point :=
-  {| max_edges := let '(x, y) := input_dim i in N.to_nat (4 * x * y)
+Definition heuristic_to '((igoal, jgoal) : point) '((i, j) : point) : N :=
+  (Z.abs_N (igoal - i) + Z.abs_N (jgoal - j)).
+
+Definition graph_of_input (i : Input) (goal : point) : graph point :=
+  let '(x, y) := input_dim i in
+  {| max_edges := 4 * x * y
   ;  neighbors := neigh (input_grid i)
+  ;  heuristic := heuristic_to goal
   |}.
 
 Definition solve (i : Input) : N :=
-  let g := graph_of_input i in
-  let start := (0, 0)%Z in
   let '(x, y) := input_dim i in
   let goal := (Z.of_N (x - 1), Z.of_N (y - 1)) in 
+  let g := graph_of_input i goal in
+  let start := (0, 0)%Z in
   dijkstra g goal start.
 
 (* Compute solve example. *)
@@ -271,8 +279,9 @@ Definition neigh (m : gmap point N) (ij : point) : list (N * point) :=
     end) (grid_neighbors ij).
 
 Definition graph_of_input : graph point :=
-  {| max_edges := let '(x, y) := input_dim ii in N.to_nat (100 * x * y)  (* 4 * REPEAT * REPEAT *)
+  {| max_edges := let '(x, y) := input_dim ii in 100 * x * y  (* 4 * REPEAT * REPEAT *)
   ;  neighbors := neigh (input_grid ii)
+  ;  heuristic := heuristic_to goal
   |}.
 
 Definition solve : N :=
@@ -295,6 +304,6 @@ Compute neighbors g (11,0)%Z.
 End Test.
 *)
 
-(* Compute solve2 example. *)
+(* Time Compute solve2 example. *)
 
 Definition solve12 i := (solve i, solve2 i).
