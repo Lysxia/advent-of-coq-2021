@@ -20,7 +20,7 @@ FUNC=$3
 INPUT_=$BUILD/${INPUT%.*}
 
 cat <(echo -e "Require Import ${SOLUTION%.v}. Definition x := input") \
-  <(if [ -e $INPUT.prep ]; then ./$INPUT.prep < $INPUT ; else cat $INPUT ; fi) \
+  <(if [ -f $INPUT.prep ]; then ./$INPUT.prep < $INPUT ; else cat $INPUT ; fi) \
   <(echo -e ".\nCompute $FUNC x.") > $INPUT_.v
 
 coqc -R $BUILD aoc $SOLUTION -o $BUILD/${SOLUTION%.v}.vo
