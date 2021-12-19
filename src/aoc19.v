@@ -1,4 +1,5 @@
 From Coq Require Export ZArith List.
+From Coq Require Import Setoid.
 Import ListNotations.
 
 From stdpp Require Import gmap sorting lexico.
@@ -262,7 +263,9 @@ Definition count {A} `{EqDecision A, Countable A} (xs : list A) : gmap A positiv
     | Some n => Some (Pos.succ n)
     end) x m) xs empty.
 
-Definition try_match (xpos : point) (x y : scanner) : option (point * scanner) :=
+(* This is not actually correct:
+   all beacons in the overlap of two scanners must be detected by both. *)
+Definition try_match (x y : scanner) : option (point * scanner) :=
   let? o := orientations in
   let y := map o y in
   let xy := count (map (fun '(a,b) => a - b)%point (list_prod x y)) in
@@ -271,11 +274,105 @@ Definition try_match (xpos : point) (x y : scanner) : option (point * scanner) :
   | [] => None
   end.
 
-Definition try_matchM (xid yid : Z) (xpos : point) (x y : scanner) : m (option (point * scanner)) :=
+Definition w_scanner_match (x y : scanner) : bool :=
+  (12 <=? size (intersection (A := gset _) (list_to_set x) (list_to_set y)))%nat.
+
+(* A more straightforward version of [try_match] to use as a spec in [try_match_correct].
+   It uses [w_scanner_match] which is an incorrect version of [scanner_match]
+   (see comment above [try_match]). *)
+Definition try_match' (x y : scanner) : option (point * scanner) :=
+  let? o := orientations in
+  let y := map o y in
+  let? ex := x in
+  let? ey := y in
+  let d := (ex - ey)%point in
+  let y := map (fun e => e + d)%point y in
+  if w_scanner_match x y then Some (d, y) else None.
+
+Definition isSome {A} (x : option A) : Prop :=
+  match x with
+  | Some _ => True
+  | None => False
+  end.
+
+Lemma isSome_find' {A B} (xs : list A) (f : A -> option B)
+  : isSome (find' xs f) <-> exists x, elem_of x xs /\ isSome (f x).
+Proof.
+  induction xs; cbn.
+  - split; [ intros [] | intros [x [Hx Hf]] ]. apply not_elem_of_nil in Hx; destruct Hx.
+  - destruct (f a) eqn:Ea.
+    + split; [ intros _; exists a | constructor ].
+      split; [ apply elem_of_list_here | rewrite Ea; constructor ].
+    + rewrite IHxs. apply Morphisms_Prop.ex_iff_morphism. hnf. intros.
+      split; intros []; split; auto.
+      * apply elem_of_list_further. auto.
+      * apply elem_of_cons in H. destruct H as [ -> | ].
+        { rewrite Ea in H0; contradiction. }
+        assumption.
+Qed.
+
+Lemma isSome_find'_impl {A B} (xs : list A) (f g : A -> option B)
+  : (forall x, isSome (f x) -> isSome (g x)) -> isSome (find' xs f) -> isSome (find' xs g).
+Proof.
+  intros Hf. rewrite 2 isSome_find'. apply Morphisms_Prop.ex_impl_morphism; hnf.
+  intros ?. apply Morphisms_Prop.and_impl_morphism; [ reflexivity | ]. exact (Hf _).
+Qed.
+
+Lemma isSome_find'_iff {A B} (xs : list A) (f g : A -> option B)
+  : (forall x, isSome (f x) <-> isSome (g x)) -> isSome (find' xs f) <-> isSome (find' xs g).
+Proof.
+  intros Hf; split; apply isSome_find'_impl, Hf.
+Qed.
+
+Definition andwith {A B : Prop} (a : A) (b : A -> B) : A /\ B := conj a (b a).
+
+Lemma map_to_list_nonemptiness {K A B} `{EqDecision K, Countable K} (m : gmap K A) (f : K * A -> B)
+  : isSome match map_to_list m with
+           | [] => None
+           | x :: _ => Some (f x)
+           end <-> exists k x, lookup k m = Some x.
+Proof.
+  split.
+  - destruct (map_to_list m) as [ |[k x] xs] eqn:E; [ contradiction | ].
+    exists k, x.
+    apply elem_of_map_to_list. rewrite E. apply elem_of_cons; left; reflexivity.
+  - intros [k [x HH]]. destruct (map_to_list m) eqn:E.
+    + apply map_to_list_empty_iff in E.
+      rewrite E in HH; apply lookup_empty_Some in HH. contradiction.
+    + constructor.
+Qed.
+
+Lemma filter_lookup {K A P} `{EqDecision K, Countable K}
+    {m : gmap K A} {HP : forall x, Decision (P x)} k x
+  : filter P m !! k = Some x <-> P (k, x) /\ m !! k = Some x.
+Proof.
+  split; intros HH.
+  - split.
+    + apply (map_filter_lookup_Some_1_2 _ m k x HH).
+    + apply (map_filter_lookup_Some_1_1 _ m k x HH).
+  - apply map_filter_lookup_Some_2; apply HH.
+Qed.
+
+Lemma try_match_correct x y : isSome (try_match x y) <-> isSome (try_match' x y).
+Proof.
+  unfold try_match, try_match'.
+  apply isSome_find'_iff. intros o; generalize (map o y); clear o y; intros y.
+  match goal with
+  | [ |- context [ map_to_list ?l ] ] =>
+    transitivity (isSome (match map_to_list l with [] => None | _ :: _ => Some tt end));
+      [ destruct map_to_list as [ | [] ]; cbn; solve [auto] | ]
+  end.
+  rewrite map_to_list_nonemptiness.
+  rewrite isSome_find'.
+  setoid_rewrite isSome_find'.
+  setoid_rewrite filter_lookup.
+Abort.
+
+Definition try_matchM (xid yid : Z) (x y : scanner) : m (option (point * scanner)) :=
   MkM (fun s =>
     let k := (xid, yid) in
     match lookup k s with
-    | None => (insert k tt s, try_match xpos x y)
+    | None => (insert k tt s, try_match x y)
     | Some _ => (s, None)
     end).
 
@@ -319,8 +416,8 @@ Qed.
 Definition next_scanner (xs : list (Z * point * scanner)) (ys : list (Z * scanner))
   : m (option (list (Z * point * scanner) * list (Z * scanner))) :=
   let?* ((yid, y), ys) := pick ys in
-  let?* (xid, xpos, x) := xs in
-  let* o := try_matchM xid yid xpos x y in
+  let?* (xid, _xpos, x) := xs in
+  let* o := try_matchM xid yid x y in
   match o with
   | None => retM None
   | Some (ypos, y) => retM (Some ((yid, ypos, y) :: xs, ys))
