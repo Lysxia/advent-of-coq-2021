@@ -115,7 +115,7 @@ Definition example2 := input
 Fixpoint pick {A} (xs : list A) : list (A * list A) :=
   match xs with
   | nil => nil
-  | x :: xs => (x, xs) :: map (fun '(y,ys) => (y,x::xs)) (pick xs)
+  | x :: xs => (x, xs) :: map (fun '(y,ys) => (y,x::ys)) (pick xs)
   end.
 
 Definition pick2 {A} (xs : list A) : list (A * A) :=
