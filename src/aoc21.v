@@ -26,7 +26,7 @@ Definition mk_board '((p1,p2) : N * N) : board :=
 
 #[global] Instance EqDecision_board : EqDecision board.
 Proof.
-  intros x y; hnf; decide equality; apply (decide _).
+  solve_decision.
 Defined.
 
 #[global] Instance Countable_board : Countable board.
