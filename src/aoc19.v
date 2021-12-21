@@ -256,7 +256,7 @@ Notation "x + y" := (on_point Z.add x y) : point_scope.
 
 Definition sort_scanner : scanner -> scanner := merge_sort lexico.
 
-Definition count {A} `{EqDecision A, Countable A} (xs : list A) : gmap A positive :=
+Definition count {A} `{Countable A} (xs : list A) : gmap A positive :=
   fold_left (fun m x => partial_alter (fun on =>
     match on with
     | None => Some 1%positive

@@ -181,7 +181,7 @@ Notation elem_set x s := (isSome (lookup x s)).
 
 Section Dijkstra. (* This is really A* now *)
 
-Context (V : Type) `{EqDecision V, Countable V}.
+Context (V : Type) `{Countable V}.
 
 Record graph : Type :=
   { max_edges : N  (* upper bound on the number of edges, as fuel *)

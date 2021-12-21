@@ -65,7 +65,7 @@ Definition occ (s : string) : (list ascii * gmap (ascii * ascii) N) :=
 
 Definition Pairs : Type := gmap (ascii * ascii) N.
 
-Definition incrmap {A} `{Countable A, EqDecision A} (a : A) (n : N) : gmap A N -> gmap A N :=
+Definition incrmap {A} `{Countable A} (a : A) (n : N) : gmap A N -> gmap A N :=
   partial_alter (fun i => Some
     match i with
     | Some i => i + n

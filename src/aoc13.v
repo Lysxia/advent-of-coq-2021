@@ -67,7 +67,7 @@ Definition fold_along (n : axis) : list point -> list point :=
   map (fold1_along n).
 
 (* stdpp's is quadratic *)
-Definition list_to_set {A} `{Countable A, EqDecision A} (xs : list A) : gset A :=
+Definition list_to_set {A} `{Countable A} (xs : list A) : gset A :=
   dom (M := gmap A unit) (gset A) (fold_right (fun x m => insert x tt m) empty xs).
 
 Definition solve '((dots, folds) : Input) : N :=

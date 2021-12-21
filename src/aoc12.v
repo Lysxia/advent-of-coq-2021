@@ -32,7 +32,7 @@ Definition example : Input := input
 
 Section G.
 
-Context (V : Type) `{EqDecision V, Countable V}.
+Context (V : Type) `{Countable V}.
 
 Definition graph : Type := gmap V (list V).
 
@@ -99,9 +99,9 @@ Instance Monad_state {S} : Monad (state S) :=
        let '(s, x) := run_state u s in
        run_state (k x) s) |}.
 
-Definition memom (A R : Type) `{EqDecision A, Countable A} : Type -> Type := state (gmap A R).
+Definition memom (A R : Type) `{Countable A} : Type -> Type := state (gmap A R).
 
-Fixpoint _memo_fix (fuel : nat) {A R} `{EqDecision A, Countable A}
+Fixpoint _memo_fix (fuel : nat) {A R} `{Countable A}
   (r0 : R) (gf : endo (A -> state (gmap A R) R)) : A -> state (gmap A R) R :=
   fun x => Mk_state (fun s =>
     match lookup x s with
@@ -112,7 +112,7 @@ Fixpoint _memo_fix (fuel : nat) {A R} `{EqDecision A, Countable A}
       (insert x y s, y)
     end).
 
-Definition memo_fix (fuel : nat) {A R} `{EqDecision A, Countable A}
+Definition memo_fix (fuel : nat) {A R} `{Countable A}
   (r0 : R) (gf : endo (A -> state (gmap A R) R)) : A -> R :=
   fun x => snd (run_state (_memo_fix fuel r0 gf x) empty).
 

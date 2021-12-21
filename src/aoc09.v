@@ -138,7 +138,7 @@ Notation elem_set x s := (isSome (lookup x s)).
 
 Section CC.
 
-Context (V : Type) `{EqDecision V, Countable V}.
+Context (V : Type) `{Countable V}.
 
 Record graph : Type :=
   { nodes : list V
