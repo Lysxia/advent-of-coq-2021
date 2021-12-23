@@ -107,10 +107,64 @@ Definition union_for {A} `{Countable A} (zmin zmax : Z) (k : Z -> gset A) : gset
   Z.iter (1 + zmax - zmin) (fun go dz m => go (Z.succ dz) (union (k (zmin + dz)) m))
     (fun _ m => m) 0 empty.
 
+Lemma Z_iter_ind {A} (f : A -> A) (x : A) (P : Z -> A -> Prop)
+    (H0 : P 0 x) (HS : forall n y, 0 <= n -> P n y -> P (Z.succ n) (f y))
+  : forall n, 0 <= n -> P n (Z.iter n f x).
+Proof.
+  intros n; induction n; intros Hn.
+  - apply H0.
+  - induction p using Pos.peano_ind.
+    + unfold Z.iter, Pos.iter. apply (HS 0); [ reflexivity | apply H0 ].
+    + unfold Z.iter. rewrite Pos.iter_succ. rewrite Pos2Z.inj_succ.
+      apply HS; [ | apply IHp ]; apply Pos2Z.is_nonneg.
+  - lia.
+Qed.
+
+Lemma Z_iter_neg {A} (f : A -> A) (x : A) n : n <= 0 -> Z.iter n f x = x.
+Proof.
+  destruct n; try reflexivity. lia.
+Qed.
+
+Lemma _union_for_spec {A} `{Countable A} (zmin zmax n : Z) (k : Z -> gset A) (x : A)
+  : 0 <= n <= 1 + zmax - zmin -> forall m,
+    (elem_of x m <-> exists z, elem_of x (k z) /\ zmin <= z <= zmax - n) ->
+    elem_of x (Z.iter n (fun go dz m => go (Z.succ dz) (union (k (zmin + dz)) m)) (fun _ m => m) (1 + zmax - zmin - n) m)
+      <-> exists z, elem_of x (k z) /\ zmin <= z <= zmax.
+Proof.
+  intros [Hn Hn']; revert Hn'; apply Z_iter_ind; [ | | apply Hn ]; clear Hn.
+  - intros Hn m Hm. rewrite Hm. rewrite Z.sub_0_r. reflexivity.
+  - clear n; intros n Hn0 f IH Hn m Hm.
+    replace (Z.succ (1 + zmax - zmin - Z.succ n)) with (1 + zmax - zmin - n) by lia.
+    apply IH; [ lia | ]. rewrite elem_of_union. rewrite Hm.
+    replace (zmin + (1 + zmax - zmin - Z.succ n)) with (zmax - n) by lia.
+    assert (HH : (elem_of x (k (zmax - n))) <-> exists z, elem_of x (k z) /\ z = zmax - n).
+    { split; [ exists (zmax - n); auto | intros [_ [? ->]]; auto ]. }
+    rewrite HH. clear HH.
+    assert (HH : forall A (P Q : A -> Prop), (ex P \/ ex Q) <-> ex (fun z => P z \/ Q z)).
+    { clear. firstorder. }
+    rewrite HH. clear HH.
+    apply Morphisms_Prop.ex_iff_morphism.
+    intros z.
+    assert (HH : forall P Q R, P /\ Q \/ P /\ R <-> P /\ (Q \/ R)).
+    { clear; tauto. }
+    rewrite HH. clear HH.
+    apply Morphisms_Prop.and_iff_morphism.
+    { reflexivity. }
+    lia.
+Qed.
+
 Lemma union_for_spec {A} `{Countable A} (zmin zmax : Z) (k : Z -> gset A) (x : A)
   : elem_of x (union_for zmin zmax k) <-> exists z, elem_of x (k z) /\ zmin <= z <= zmax.
 Proof.
-Admitted.
+  unfold union_for. destruct (decide (zmin <= zmax)).
+  - evar (zz : Z). replace 0 with zz.
+    + apply _union_for_spec. lia.
+      rewrite elem_of_empty.
+      split; [ intros [] | intros [z []] ]. lia.
+    + lia.
+  - rewrite Z_iter_neg by lia. rewrite elem_of_empty.
+    split; [ intros [] | intros [z []] ]. lia.
+Qed.
 
 Definition cube_to_set (c : cube) : gset point :=
   let '(_, (xmin,xmax), (ymin,ymax), (zmin,zmax)) := c in
