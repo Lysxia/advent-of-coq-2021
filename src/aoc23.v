@@ -13,29 +13,29 @@ Inductive t := A | B | C | D.
 
 Inductive cell : Type :=
 | Hall (_ : option t)
-| Room (label : t) (_ : option t) (_ : option t)
+| Room (label : t) (_ : list (option t))
 .
 
 Notation hall_ := (Hall None).
 Notation hall x := (Hall (Some x)).
-Definition room_ x a b := Room x (Some a) (Some b).
+Definition room_ x a b := Room x (Some a :: Some b :: nil).
 
 Definition conf : Type := list cell. (* configuration *)
 
 Definition mkconf (a b c d e f g h : t) : conf :=
   hall_ ::
   hall_ ::
-  room_ A a e ::
+  room_ A a b ::
   hall_ ::
-  room_ B b f ::
+  room_ B c d ::
   hall_ ::
-  room_ C c g ::
+  room_ C e f ::
   hall_ ::
-  room_ D d h ::
+  room_ D g h ::
   hall_ ::
   hall_ :: nil.
 
-Notation "'input' ############# # # ### a # b # c # d ### # e # f # g # h # #########" := (mkconf a b c d e f g h)
+Notation "'input' ############# # # ### a # c # e # g ### # b # d # f # h # #########" := (mkconf a b c d e f g h)
   (at level 200, only parsing).
 
 Definition example := input
@@ -89,16 +89,37 @@ Fixpoint walk_right {B} (pre suf : list cell) (k : N -> list cell -> cell -> lis
 Definition walk {B} (pre suf : list cell) (mid : cell) (k : N -> list cell -> cell -> list cell -> list B) : list B :=
   walk_left pre (mid :: suf) k ++ walk_right (mid :: pre) suf k.
 
+Fixpoint _walk_room {B} (pre suf : list (option t)) (k : N -> list (option t) -> list (option t) -> list B) : list B :=
+  match suf with
+  | nil => nil
+  | Some _ :: _ => nil
+  | None :: suf => k 1 pre suf ++ _walk_room (None :: pre) suf (fun i => k (N.succ i))
+  end.
+
+Definition walk_room {B} suf k : list B := _walk_room nil suf k.
+
 Definition __pick1_Room (n : N) (c : cell) (pre suf : list cell) (x : t) : list (N * conf) :=
   walk pre suf c (fun m pre c2 suf =>
     match c2 with
     | Hall _ (* must be None *) => (cost x * (n + m), rev_append pre (Hall (Some x) :: suf)) :: nil
-    | Room l y z => if eqb_t x l then
-        let conf1 := (cost x * (n + m + 1), rev_append pre (Room l (Some x) z :: suf)) in
-        let conf2 := (cost x * (n + m + 2), rev_append pre (Room l None (Some x) :: suf)) in
-        skipSome y (conf1 :: skipSome z (conf2 :: nil))
+    | Room l ys => if eqb_t x l then
+        walk_room ys (fun p ypre ysuf =>
+          let rm := rev_append ypre (Some x :: ysuf) in
+          let c := cost x * (n + m + p) in
+          let conf := rev_append pre (Room l rm :: suf) in
+          (c, conf) :: nil)
       else nil
     end).
+
+Fixpoint ___take_top (xs : list (option t)) (k : N -> t -> list (option t) -> option (N * t * list (option t))) : option (N * t * list (option t)) :=
+  match xs with
+  | nil => None
+  | None :: xs => ___take_top xs (fun i x xs => k (N.succ i) x (None :: xs))
+  | Some x :: xs => k 1 x (None :: xs)
+  end.
+
+Definition __take_top (xs : list (option t)) : option (N * t * list (option t)) :=
+  ___take_top xs (fun c t xs => Some (c, t, xs)).
 
 Definition __pick1 pre suf c : list (N * conf) :=
   match c with
@@ -106,16 +127,18 @@ Definition __pick1 pre suf c : list (N * conf) :=
   | Hall (Some x) => walk pre suf (Hall None) (fun n pre c2 suf =>
     match c2 with
     | Hall _ => nil
-    | Room l y z => if eqb_t x l then
-        let conf1 := (cost x * (n+1), rev_append pre (Room l (Some x) z :: suf)) in
-        let conf2 := (cost x * (n+2), rev_append pre (Room l None (Some x) :: suf)) in
-        skipSome y (conf1 :: skipSome z (conf2 :: nil))
+    | Room l ys => if eqb_t x l then
+        walk_room ys (fun p ypre ysuf =>
+          let rm := rev_append ypre (Some x :: ysuf) in
+          let c := cost x * (n + p) in
+          let conf := rev_append pre (Room l rm :: suf) in
+          (c, conf) :: nil)
       else nil
     end)
-  | Room l x y =>
-    match x with
-    | None => skipNone y (fun y => if eqb_t l y then nil else __pick1_Room 2 (Room l x None) pre suf y)
-    | Some x => __pick1_Room 1 (Room l None y) pre suf x
+  | Room l xs =>
+    match __take_top xs with
+    | None => nil
+    | Some (n, x, xs) => __pick1_Room n (Room l xs) pre suf x
     end
   end.
 
@@ -145,14 +168,14 @@ Proof. solve_decision. Defined.
 
 #[global] Instance Countable_cell : Countable cell.
 Proof.
-  apply (inj_countable (A := option t + (t * option t * option t))%type
+  apply (inj_countable (A := option t + (t * list (option t)))%type
           (fun c => match c with
             | Hall x => inl x
-            | Room x y z => inr (x,y,z)
+            | Room x xs => inr (x,xs)
             end)
           (fun c => Some match c with
             | inl x => Hall x
-            | inr (x,y,z) => Room x y z
+            | inr (x,xs) => Room x xs
             end)).
   intros []; reflexivity.
 Defined.
@@ -311,18 +334,23 @@ End Dijkstra.
 Definition ffact (n k : N) : N :=
   N.iter k (fun _ff n => n * _ff (N.pred n)) (fun _ => 1) n.
 
+Fixpoint heur_room (l : t) (xs : list (option t)) (n : N) : N :=
+  if forallb (fun x => bool_decide (x = Some l)) xs then 0 else
+  match xs with
+  | nil => 0
+  | x :: xs => heur_room l xs (N.succ n) +
+    match x with
+    | Some x => n * cost x
+    | None => 0
+    end
+  end.
+
 Definition heur (l : conf) : N :=
   fold_right (fun x h => h +
     match x with
     | Hall (Some x) => cost x * 2
     | Hall None => 0
-    | Room l u v =>
-      let cc o :=
-        match o with
-        | None => 0
-        | Some x => if eqb_t x l then 0 else cost x
-        end in
-      4 * cc u + 5 * cc v
+    | Room l xs => heur_room l xs 1
     end) 0 l.
 
 Definition graph_conf : graph conf :=
@@ -331,7 +359,7 @@ Definition graph_conf : graph conf :=
   ;  heuristic := heur
   |}.
 
-Definition goal := mkconf A B C D A B C D.
+Definition goal := mkconf A A B B C C D D.
 
 Definition solve : conf -> N := dijkstra graph_conf goal.
 
@@ -406,3 +434,24 @@ Definition example10 : conf :=
 *)
 
 (* Time Compute solve example. *)
+
+Definition tweak (xs : conf) : conf :=
+  match xs with
+  | _ :: _ ::
+    Room _ (a :: b :: _) :: _ ::
+    Room _ (c :: d :: _) :: _ ::
+    Room _ (e :: f :: _) :: _ ::
+    Room _ (g :: h :: _) :: _ =>
+    hall_ :: hall_ ::
+    Room A (a :: Some D :: Some D :: b :: nil) :: hall_ ::
+    Room B (c :: Some C :: Some B :: d :: nil) :: hall_ ::
+    Room C (e :: Some B :: Some A :: f :: nil) :: hall_ ::
+    Room D (g :: Some A :: Some C :: h :: nil) :: hall_ :: hall_ :: nil
+  | _ => nil
+  end.
+
+Definition solve2 xs := solve (tweak xs).
+
+Time Compute solve2 example.
+
+Definition solve12 xs := (solve xs, solve2 xs).
