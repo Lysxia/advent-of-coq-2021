@@ -182,6 +182,14 @@ Notation "'let?' x ':=' xs 'in' f" := (find' xs (fun x => f))
 Notation "'let?*' x ':=' xs 'in' f" := (findM xs (fun x => f))
   (at level 200, x pattern).
 
+(* [log_lt n b k = true] if [k / b^n = 0] *)
+Fixpoint log_lt (n : nat) (b k : Z) : bool :=
+  (k =? 0) ||
+  match n with
+  | O => false
+  | S n => log_lt n b (k / b)
+  end.
+
 Definition _search {M} `{Monad M} (digits : list Z)
   : endo (Z * N -> list (Z -> Z -> Z) -> M (option (list Z))) := fun _search '(rz, n) ts =>
   match ts with
@@ -189,8 +197,11 @@ Definition _search {M} `{Monad M} (digits : list Z)
   | t :: ts =>
     let?* d := digits in
     let rz := t d rz in
-    let* r := _search (rz, N.succ n) ts in
-    ret (option_map (cons d) r)
+    if log_lt (13 - N.to_nat n) 26 rz then
+      let* r := _search (rz, N.succ n) ts in
+      ret (option_map (cons d) r)
+    else
+      ret None
   end.
 
 Definition decimal (xs : list Z) : Z :=
@@ -208,10 +219,12 @@ Definition solve (i : list instr) : option Z :=
   | Some ts => search (9::8::7::6::5::4::3::2::1::nil) (map step ts)
   end.
 
-(*
-Compute
-  let step x d z :=
-    if (z =? 0) && (d =? x) then 0 else 1 in
-  search (1::0::nil) (map step (1::0::1::1::1::1::1::1::1::1::1::1::1::1::1::1::1::1::nil)).
-*)
+Definition solve2 (i : list instr) : option Z :=
+  match recognize i with
+  | None => None
+  | Some ts => search (1::2::3::4::5::6::7::8::9::nil) (map step ts)
+  end.
+
+Definition solve12 i := (solve i, solve2 i).
+
 (* Compute solve example. *)
