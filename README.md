@@ -16,9 +16,14 @@ Dependencies:
 opam install coq-stdpp
 
 # Run
+
 cd src/
 
+# Run Day 01
 ./a.sh aoc01.v aoc01_input.txt solve12  # Pair of answers for Day 1: Part One and Part Two
+
+# Run all days (this will take a big few minutes)
+sh ./runall.sh
 ```
 
 ## Notes
