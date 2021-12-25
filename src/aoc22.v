@@ -384,7 +384,7 @@ Lemma add_cube_nested (cs : list cube) (c : cube)
 Proof.
   intros Hcs. destruct c as [[[i ?] ?] ?]; cbn [add_cube add_cube']. destruct i.
   - cbn [count_on foldr].
-    constructor. [ | apply nested_cancel_cubes; auto ].
+    constructor; [ | apply nested_cancel_cubes; auto ].
     rewrite difference_cancel_cubes by auto.
     apply disjoint_difference_l1. reflexivity.
   - apply nested_cancel_cubes; auto.
