@@ -25,7 +25,7 @@ Notation "'add' r1 r2" := (Mk_instr Add r1%Z r2%Z)
   (in custom alu at level 1, r1 constr at level 0, r2 constr at level 0).
 Notation "'mul' r1 r2" := (Mk_instr Mul r1%Z r2%Z)
   (in custom alu at level 1, r1 constr at level 0, r2 constr at level 0).
-Notation "'div' r1 r2" := (Mk_instr Add r1%Z r2%Z)
+Notation "'div' r1 r2" := (Mk_instr Div r1%Z r2%Z)
   (in custom alu at level 1, r1 constr at level 0, r2 constr at level 0).
 Notation "'mod' r1 r2" := (Mk_instr Mod r1%Z r2%Z)
   (in custom alu at level 1, r1 constr at level 0, r2 constr at level 0).
