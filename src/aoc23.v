@@ -16,6 +16,34 @@ Inductive cell : Type :=
 | Room (label : t) (_ : list (option t))
 .
 
+#[global] Instance EqDecision_t : EqDecision t.
+Proof. solve_decision. Defined.
+
+#[global] Instance Countable_t : Countable t.
+Proof.
+  refine {|
+    encode := fun x => match x with A => 1 | B => 2 | C => 4 | D => 5 end ;
+    decode := fun x => match x with 1 => Some A | 2 => Some B | 4 => Some C | 5 => Some D | _ => None end |}%positive.
+  intros []; reflexivity.
+Defined.
+
+#[global] Instance EqDecision_cell : EqDecision cell.
+Proof. solve_decision. Defined.
+
+#[global] Instance Countable_cell : Countable cell.
+Proof.
+  apply (inj_countable (A := option t + (t * list (option t)))%type
+          (fun c => match c with
+            | Hall x => inl x
+            | Room x xs => inr (x,xs)
+            end)
+          (fun c => Some match c with
+            | inl x => Hall x
+            | inr (x,xs) => Room x xs
+            end)).
+  intros []; reflexivity.
+Defined.
+
 Notation hall_ := (Hall None).
 Notation hall x := (Hall (Some x)).
 Definition room_ x a b := Room x (Some a :: Some b :: nil).
@@ -89,26 +117,21 @@ Fixpoint walk_right {B} (pre suf : list cell) (k : N -> list cell -> cell -> lis
 Definition walk {B} (pre suf : list cell) (mid : cell) (k : N -> list cell -> cell -> list cell -> list B) : list B :=
   walk_left pre (mid :: suf) k ++ walk_right (mid :: pre) suf k.
 
-Fixpoint _walk_room {B} (pre suf : list (option t)) (k : N -> list (option t) -> list (option t) -> list B) : list B :=
-  match suf with
-  | nil => nil
-  | Some _ :: _ => nil
-  | None :: suf => k 1 pre suf ++ _walk_room (None :: pre) suf (fun i => k (N.succ i))
+Fixpoint into_room (x : t) (xs : list (option t)) : option (list (option t) * N) :=
+  match xs with
+  | None :: ((None :: _) as xs) =>
+      option_map (fun '(xs, n) => (None :: xs, N.succ n)) (into_room x xs)
+  | None :: ((Some _ :: _ | nil) as xs) =>
+      if forallb (fun y => bool_decide (y = Some x)) xs then Some (Some x :: xs, 1) else None
+  | Some _ :: _ => None
+  | nil => None
   end.
-
-Definition walk_room {B} suf k : list B := _walk_room nil suf k.
 
 Definition __pick1_Room (n : N) (c : cell) (pre suf : list cell) (x : t) : list (N * conf) :=
   walk pre suf c (fun m pre c2 suf =>
     match c2 with
     | Hall _ (* must be None *) => (cost x * (n + m), rev_append pre (Hall (Some x) :: suf)) :: nil
-    | Room l ys => if eqb_t x l then
-        walk_room ys (fun p ypre ysuf =>
-          let rm := rev_append ypre (Some x :: ysuf) in
-          let c := cost x * (n + m + p) in
-          let conf := rev_append pre (Room l rm :: suf) in
-          (c, conf) :: nil)
-      else nil
+    | Room _ _ => nil (* They'll just move into a room in the next step *)
     end).
 
 Fixpoint ___take_top (xs : list (option t)) (k : N -> t -> list (option t) -> option (N * t * list (option t))) : option (N * t * list (option t)) :=
@@ -128,11 +151,13 @@ Definition __pick1 pre suf c : list (N * conf) :=
     match c2 with
     | Hall _ => nil
     | Room l ys => if eqb_t x l then
-        walk_room ys (fun p ypre ysuf =>
-          let rm := rev_append ypre (Some x :: ysuf) in
-          let c := cost x * (n + p) in
-          let conf := rev_append pre (Room l rm :: suf) in
-          (c, conf) :: nil)
+        match into_room x ys with
+        | None => nil
+        | Some (ys, p) =>
+            let c := cost x * (n + p) in
+            let conf := rev_append pre (Room l ys :: suf) in
+            (c, conf) :: nil
+        end
       else nil
     end)
   | Room l xs =>
@@ -151,34 +176,6 @@ Fixpoint _pick1 (pre suf : list cell) : list (N * conf) :=
 Definition neighbors_conf (c : conf) : list (N * conf) := _pick1 nil c.
 
 (* Compute neighbors_conf example.  *)
-
-#[global] Instance EqDecision_t : EqDecision t.
-Proof. solve_decision. Defined.
-
-#[global] Instance Countable_t : Countable t.
-Proof.
-  refine {|
-    encode := fun x => match x with A => 1 | B => 2 | C => 4 | D => 5 end ;
-    decode := fun x => match x with 1 => Some A | 2 => Some B | 4 => Some C | 5 => Some D | _ => None end |}%positive.
-  intros []; reflexivity.
-Defined.
-
-#[global] Instance EqDecision_cell : EqDecision cell.
-Proof. solve_decision. Defined.
-
-#[global] Instance Countable_cell : Countable cell.
-Proof.
-  apply (inj_countable (A := option t + (t * list (option t)))%type
-          (fun c => match c with
-            | Hall x => inl x
-            | Room x xs => inr (x,xs)
-            end)
-          (fun c => Some match c with
-            | inl x => Hall x
-            | inr (x,xs) => Room x xs
-            end)).
-  intros []; reflexivity.
-Defined.
 
 (* Priority queue with a heap à la Lampropoulos (Ode on a random urn) *)
 Module Q.
@@ -288,10 +285,10 @@ Record graph : Type :=
 Definition no_fuel : N. Proof. exact 0. Qed.
 Definition not_found : N. Proof. exact 0. Qed.
 
-Definition _dijkstra (g : graph) (goal : V) (__dijkstra : _)
+Definition _dijkstra (g : graph) (goal : V -> bool) (__dijkstra : _)
     (q : Q.t N.le (N * V)) (visited : set V) : N :=
   match Q.pop q with None => not_found | Some (_, (d, v), q) =>
-  if decide (v = goal) then d (* REACHED GOAL *) else
+  if goal v then d (* REACHED GOAL *) else
   if elem_set v visited then __dijkstra q visited (* SKIP *) else
   let visited := insert_set v visited in
   let push q '(dd, v) := if elem_set v visited then q else Q.push (d + dd + heuristic g v) (d + dd, v) q in
@@ -323,7 +320,7 @@ Proof.
     + reflexivity.
 Qed.
 
-Definition dijkstra (g : graph) (goal start : V) : N :=
+Definition dijkstra (g : graph) (goal : V -> bool) (start : V) : N :=
   lazy_iter (N.succ (max_edges g)) (_dijkstra g goal) (fun _ _ => no_fuel)
     (Q.push 0 (* don't need the heuristic for the first point *) (0, start) Q.empty)
     empty.
@@ -359,7 +356,12 @@ Definition graph_conf : graph conf :=
   ;  heuristic := heur
   |}.
 
-Definition goal := mkconf A A B B C C D D.
+Definition goal (c : conf) : bool :=
+  forallb (fun x => match x with
+    | Hall None => true
+    | Hall (Some _) => false
+    | Room l ys => forallb (fun y => bool_decide (y = Some l)) ys
+    end) c.
 
 Definition solve : conf -> N := dijkstra graph_conf goal.
 
@@ -452,6 +454,6 @@ Definition tweak (xs : conf) : conf :=
 
 Definition solve2 xs := solve (tweak xs).
 
-Time Compute solve2 example.
+(* Time Compute solve2 example. *)
 
 Definition solve12 xs := (solve xs, solve2 xs).
