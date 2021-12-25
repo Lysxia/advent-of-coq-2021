@@ -100,3 +100,8 @@ Fixpoint steps_to_stop (fuel : nat) (xs : list (list cell)) : N :=
 Definition solve (xs : list string) : N := steps_to_stop 999 (parse xs).
 
 (* Compute solve example. *)
+
+#[global] Open Scope N_scope.
+#[global] Open Scope string_scope.
+
+Definition solve12 xs := (solve xs, "Merry Christmas").
